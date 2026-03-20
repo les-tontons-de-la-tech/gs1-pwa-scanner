@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import { Camera, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
+import { Camera, X, AlertTriangle } from 'lucide-react';
 
 interface ScannerProps {
   onScan: (decodedText: string) => void;
@@ -9,28 +9,40 @@ interface ScannerProps {
 }
 
 export function Scanner({ onScan, isActive, onClose }: ScannerProps) {
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isActive) return;
 
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      "qr-reader",
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      /* verbose= */ false
-    );
+    setError(null);
+    const html5QrCode = new Html5Qrcode("qr-reader");
 
-    html5QrcodeScanner.render(
+    // Start picking the back camera automatically
+    html5QrCode.start(
+      { facingMode: "environment" }, // Focus on back camera natively
+      { fps: 10, qrbox: { width: 250, height: 250 } },
       (decodedText) => {
-        html5QrcodeScanner.clear().then(() => {
+        // Stop scanning after success
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            onScan(decodedText);
+          }).catch(() => onScan(decodedText));
+        } else {
           onScan(decodedText);
-        });
+        }
       },
       () => {
-        // Ignoring background errors
+        // ignoring frame errors
       }
-    );
+    ).catch(err => {
+      console.error(err);
+      setError("Le navigateur bloque l'accès à la caméra ou aucune caméra n'a été détectée. Veuillez autoriser l'accès.");
+    });
 
     return () => {
-      html5QrcodeScanner.clear().catch(() => {});
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop().catch(() => {});
+      }
     };
   }, [isActive, onScan]);
 
@@ -40,7 +52,9 @@ export function Scanner({ onScan, isActive, onClose }: ScannerProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="bg-card w-full max-w-md p-6 rounded-xl shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
         <button 
-          onClick={onClose}
+          onClick={() => {
+            onClose();
+          }}
           className="absolute right-4 top-4 p-2 bg-muted hover:bg-muted text-foreground rounded-full transition-colors z-10"
         >
           <X className="w-5 h-5" />
@@ -55,7 +69,15 @@ export function Scanner({ onScan, isActive, onClose }: ScannerProps) {
           </p>
         </div>
         
-        <div id="qr-reader" className="w-full rounded-lg overflow-hidden border border-border bg-white text-black p-2"></div>
+        {/* Le conteneur vidéo pour Html5Qrcode */}
+        <div id="qr-reader" className="w-full rounded-lg overflow-hidden border border-border bg-black min-h-[250px] flex items-center justify-center relative"></div>
+        
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <p>{error}</p>
+          </div>
+        )}
       </div>
     </div>
   );

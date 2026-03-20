@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Camera, QrCode, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { PersonaSelector, type PersonaType } from './components/PersonaSelector';
 import { Scanner } from './components/Scanner';
@@ -8,11 +8,23 @@ export default function App() {
   const [selectedPersona, setSelectedPersona] = useState<PersonaType>('A');
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<SimulationResult | null>(null);
+  const scannerRef = useRef<HTMLElement>(null);
+  const resultRef = useRef<HTMLElement>(null);
+
+  const handlePersonaSelect = (persona: PersonaType) => {
+    setSelectedPersona(persona);
+    setTimeout(() => {
+      scannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
 
   const handleScan = (decodedText: string) => {
     setIsScanning(false);
     const result = simulateScan(decodedText, selectedPersona);
     setScanResult(result);
+    setTimeout(() => {
+      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   return (
@@ -34,11 +46,11 @@ export default function App() {
             <div className="w-6 h-6 rounded-full bg-[var(--color-secondary)] text-white flex items-center justify-center text-sm font-bold">1</div>
             <h2 className="text-lg font-semibold text-foreground">Choisissez un Persona</h2>
           </div>
-          <PersonaSelector selected={selectedPersona} onSelect={setSelectedPersona} />
+          <PersonaSelector selected={selectedPersona} onSelect={handlePersonaSelect} />
         </section>
 
         {/* Step 2: Scan Action */}
-        <section className="space-y-4">
+        <section ref={scannerRef} className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-[var(--color-secondary)] text-white flex items-center justify-center text-sm font-bold">2</div>
             <h2 className="text-lg font-semibold text-foreground">Scanner un GS1 Digital Link</h2>
@@ -54,7 +66,7 @@ export default function App() {
 
         {/* Scan Result */}
         {scanResult && (
-          <section className="mt-8 transition-all animate-in zoom-in-95 duration-300">
+          <section ref={resultRef} className="mt-8 transition-all animate-in zoom-in-95 duration-300">
             <div className="bg-card border border-border shadow-xl rounded-2xl overflow-hidden">
               <div className="bg-slate-50 p-4 border-b flex items-center gap-3">
                 <ShieldCheck className="w-6 h-6 text-[var(--color-primary)]" />
@@ -88,6 +100,37 @@ export default function App() {
                       <DataCard label="DLUO / Expiry" value={scanResult.decoded.expiry} />
                       <DataCard label="Serial" value={scanResult.decoded.serial} />
                     </div>
+
+                    {scanResult.compliance && (
+                      <div className={`p-4 rounded-xl border mt-4 ${
+                        scanResult.compliance.status === 'success' ? 'bg-green-50/50 border-green-200' :
+                        scanResult.compliance.status === 'warning' ? 'bg-orange-50/50 border-orange-200' :
+                        'bg-red-50/50 border-red-200'
+                      }`}>
+                        <h4 className={`text-md font-bold mb-1 ${
+                          scanResult.compliance.status === 'success' ? 'text-green-800' :
+                          scanResult.compliance.status === 'warning' ? 'text-orange-800' :
+                          'text-red-800'
+                        }`}>
+                          {scanResult.compliance.status === 'success' ? '✅ CONFORME : ' :
+                           scanResult.compliance.status === 'warning' ? '⚠️ PARTIELLEMENT CONFORME : ' : '❌ NON CONFORME : '}
+                          {scanResult.compliance.title}
+                        </h4>
+                        <p className="text-sm text-slate-700 mb-3 italic">
+                          {scanResult.compliance.explanation}
+                        </p>
+                        <div className="space-y-2">
+                          {scanResult.compliance.checks.map((chk, i) => (
+                            <div key={i} className="flex items-center justify-between text-sm bg-white p-2 rounded border shadow-sm">
+                              <span className="font-medium text-slate-700 flex items-center gap-2">
+                                {chk.valid ? '🟢' : '🔴'} {chk.label}
+                              </span>
+                              {chk.value && <span className="text-slate-500 font-mono text-xs">{chk.value}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 mt-4">
                       <h4 className="text-md font-bold text-[var(--color-primary)] mb-2 border-b border-blue-100 pb-2">
